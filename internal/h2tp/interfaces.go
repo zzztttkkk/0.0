@@ -11,6 +11,8 @@ type RequestCtx struct {
 	Request    *http.Request
 	PathParams httprouter.Params
 	http.ResponseWriter
+
+	middlewareIdx int
 }
 
 func (rctx *RequestCtx) Deadline() (deadline time.Time, ok bool) {
@@ -43,4 +45,10 @@ func (f HandlerFunc) Handle(rctx *RequestCtx) {
 
 type Middleware interface {
 	Handle(rctx *RequestCtx, next func())
+}
+
+type MiddlewareFunc func(rctx *RequestCtx, next func())
+
+func (f MiddlewareFunc) Handle(rctx *RequestCtx, next func()) {
+	f(rctx, next)
 }

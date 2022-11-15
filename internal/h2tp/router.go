@@ -24,14 +24,13 @@ func (r *Router) Use(middleware Middleware) {
 	r.middleware = append(r.middleware, middleware)
 }
 
-func (r *Router) makeHandler(handler Handler) Handler {
+func (r *Router) makeMiddlewareWrapper(handler Handler) Handler {
 	return HandlerFunc(func(rctx *RequestCtx) {
-		var idx = -1
 		var next func()
 		next = func() {
-			idx++
-			if idx < len(r.middleware) {
-				r.middleware[idx].Handle(rctx, next)
+			rctx.middlewareIdx++
+			if rctx.middlewareIdx < len(r.middleware) {
+				r.middleware[rctx.middlewareIdx].Handle(rctx, next)
 			} else {
 				handler.Handle(rctx)
 			}
@@ -54,8 +53,9 @@ func (r *Router) Register(method string, pattern string, handler Handler) {
 			Request:        request,
 			ResponseWriter: writer,
 			PathParams:     params,
+			middlewareIdx:  -1,
 		}
-		handler = r.makeHandler(handler)
+		handler = r.makeMiddlewareWrapper(handler)
 		handler.Handle(&rctx)
 	})
 }
