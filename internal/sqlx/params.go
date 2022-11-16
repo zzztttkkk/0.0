@@ -2,7 +2,6 @@ package sqlx
 
 import (
 	"fmt"
-	"github.com/zzztttkkk/0.0/internal/sqlx/internal"
 	"github.com/zzztttkkk/0.0/internal/utils"
 	"reflect"
 	"strings"
@@ -61,7 +60,7 @@ func scanParams(q []byte) []_Param {
 	return lst
 }
 
-func ScanParams(txt string, driver internal.Driver) (string, []string) {
+func ScanParams(txt string, driver Driver) (string, []string) {
 	if !strings.Contains(txt, "${") {
 		return txt, nil
 	}

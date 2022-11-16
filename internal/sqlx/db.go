@@ -5,17 +5,40 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/zzztttkkk/0.0/internal/sqlx/internal"
+	"strings"
 )
 
 type DB struct {
 	readonly bool
 	std      *sql.DB
 	logger   Logger
-	driver   internal.Driver
+	driver   Driver
 }
 
-func (db *DB) Driver() internal.Driver {
+func OpenDB(driver Driver, dsn string, readonly bool, logger Logger) (*DB, error) {
+	connector, e := driver.Open(dsn)
+	if e != nil {
+		return nil, e
+	}
+
+	db := &DB{
+		readonly: readonly,
+		std:      sql.OpenDB(connector),
+		logger:   logger,
+		driver:   driver,
+	}
+	return db, nil
+}
+
+func MustOpenDB(driver Driver, dsn string, readonly bool, logger Logger) *DB {
+	db, err := OpenDB(driver, dsn, readonly, logger)
+	if err != nil {
+		panic(err)
+	}
+	return db
+}
+
+func (db *DB) Driver() Driver {
 	return db.driver
 }
 
@@ -124,17 +147,34 @@ func (db *DB) Prepare(ctx context.Context, query string) (*Stmt, error) {
 	}, nil
 }
 
-func (db *DB) EnsurePostgresExtensions(ctx context.Context, exts ...string) *DB {
-	if len(exts) == 0 {
-		exts = []string{"hstore", "uuid-ossp", "pgcrypto"}
-	}
-	for _, s := range exts {
-		_, e := db.Execute(ctx, fmt.Sprintf(`CREATE EXTENSION IF NOT EXISTS %s;`, s), nil)
-		if e != nil {
-			panic(e)
+type FiledInfo struct {
+	Name    string
+	SqlType string
+	Ext     string
+}
+
+func (db *DB) CreateTable(name string, fields ...FiledInfo) {
+	sb := strings.Builder{}
+	sb.WriteString("CREATE TABLE IF NOT EXISTS ")
+	sb.WriteString(name)
+	sb.WriteString(" (\n")
+
+	for idx, info := range fields {
+		sb.WriteRune('\t')
+		sb.WriteString(info.Name)
+		sb.WriteRune(' ')
+		sb.WriteString(info.SqlType)
+		if len(info.Ext) > 0 {
+			sb.WriteRune(' ')
+			sb.WriteString(info.Ext)
 		}
+		if idx < len(fields)-1 {
+			sb.WriteRune(',')
+		}
+		sb.WriteRune('\n')
 	}
-	return db
+
+	fmt.Println(sb.String())
 }
 
 var _ Executor = (*DB)(nil)

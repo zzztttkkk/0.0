@@ -3,7 +3,6 @@ package sqlx
 import (
 	"context"
 	"database/sql"
-	"github.com/zzztttkkk/0.0/internal/sqlx/internal"
 	"math/rand"
 	"time"
 )
@@ -34,11 +33,11 @@ type Group struct {
 	w      *DB
 	rs     []*DB
 	pick   func() int
-	driver internal.Driver
+	driver Driver
 	logger Logger
 }
 
-func (g *Group) Driver() internal.Driver {
+func (g *Group) Driver() Driver {
 	return g.driver
 }
 
@@ -82,7 +81,7 @@ var (
 	_ Executor = (*Group)(nil)
 )
 
-func NewGroup(driver internal.Driver, dsn string, opts *GroupOptions) *Group {
+func NewGroup(driver Driver, dsn string, opts *GroupOptions) *Group {
 	if opts == nil {
 		opts = &GroupOptions{}
 	}

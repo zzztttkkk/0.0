@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/zzztttkkk/0.0/internal/sqlx/internal"
 )
 
 type Tx struct {
@@ -16,7 +15,7 @@ type Tx struct {
 	canceled  bool
 }
 
-func (tx *Tx) Driver() internal.Driver {
+func (tx *Tx) Driver() Driver {
 	return tx.db.driver
 }
 

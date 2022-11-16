@@ -101,7 +101,7 @@ func (rows *Rows) scanToStruct(v *reflect.Value, columns []string, temp *[]inter
 	for _, c := range columns {
 		v, ok := vm[c]
 		if !ok {
-			return fmt.Errorf("sqlx: missing column `%s`", c)
+			return fmt.Errorf("0.0/internal/sqlx: missing column `%s`", c)
 		}
 		*temp = append(*temp, v.Addr().Interface())
 	}
@@ -217,7 +217,7 @@ func (rows *Rows) ScanJoined(dist interface{}, get JoinedEmbedDistGetter) error 
 
 		fi, ok := cdT.Names[c]
 		if !ok {
-			return fmt.Errorf("sqlx: bad column name `%s`", c)
+			return fmt.Errorf("0.0/internal/sqlx: bad column name `%s`", c)
 		}
 		f := cdV.FieldByIndex(fi.Index)
 		ptrs = append(ptrs, f.Addr().Interface())

@@ -3,7 +3,6 @@ package sqlx
 import (
 	"context"
 	"database/sql"
-	"github.com/zzztttkkk/0.0/internal/sqlx/internal"
 )
 
 type BasicExecutor interface {
@@ -20,7 +19,7 @@ type Executor interface {
 	BindParams(query string, params interface{}) (string, []interface{}, error)
 	Prepare(ctx context.Context, query string) (*Stmt, error)
 	DB() *DB
-	Driver() internal.Driver
+	Driver() Driver
 }
 
 func fetchOne(ctx context.Context, be BasicExecutor, query string, params interface{}, dist interface{}) error {

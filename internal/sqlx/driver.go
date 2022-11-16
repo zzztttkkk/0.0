@@ -1,4 +1,4 @@
-package internal
+package sqlx
 
 import (
 	"database/sql/driver"
