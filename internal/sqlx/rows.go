@@ -97,7 +97,7 @@ func (rows *Rows) scanToMap(v *reflect.Value, columns []string, temp *[]interfac
 func (rows *Rows) scanToStruct(v *reflect.Value, columns []string, temp *[]interface{}) error {
 	defer func() { *temp = (*temp)[:0] }()
 
-	vm := mapper.FieldMap(*v)
+	vm := DBReflectMapper.FieldMap(*v)
 	for _, c := range columns {
 		v, ok := vm[c]
 		if !ok {
@@ -206,7 +206,7 @@ func (rows *Rows) ScanJoined(dist interface{}, get JoinedEmbedDistGetter) error 
 			}
 
 			cdV = cdV.Elem()
-			cdT = mapper.TypeMap(reflect.TypeOf(currentDist).Elem())
+			cdT = DBReflectMapper.TypeMap(reflect.TypeOf(currentDist).Elem())
 			cdFieldsRemain = len(cdT.Names)
 			if cdFieldsRemain < 1 {
 				cdT = nil

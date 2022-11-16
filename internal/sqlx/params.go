@@ -121,10 +121,10 @@ func (p Params) Values(keys []string) ([]interface{}, error) {
 }
 
 var (
-	paramsType     = reflect.TypeOf(Params{})
-	paramSliceType = reflect.TypeOf(ParamSlice{})
-	sliceType      = reflect.TypeOf([]interface{}{})
-	mapper         = utils.NewMapper("db")
+	paramsType      = reflect.TypeOf(Params{})
+	paramSliceType  = reflect.TypeOf(ParamSlice{})
+	sliceType       = reflect.TypeOf([]interface{}{})
+	DBReflectMapper = utils.NewMapper("db")
 )
 
 func paramsToMap(params interface{}) (Params, error) {
@@ -146,7 +146,7 @@ func paramsToMap(params interface{}) (Params, error) {
 
 	var m Params
 	var pv = reflect.ValueOf(params)
-	for n, f := range mapper.TypeMap(t).Names {
+	for n, f := range DBReflectMapper.TypeMap(t).Names {
 		fv := pv.FieldByIndex(f.Index)
 		if m == nil {
 			m = make(Params)
@@ -178,7 +178,7 @@ func paramsToArgs(params interface{}, keys []string) ([]interface{}, error) {
 	}
 
 	var args []interface{}
-	var m = mapper.TypeMap(t).Names
+	var m = DBReflectMapper.TypeMap(t).Names
 	var pv = reflect.ValueOf(params)
 	for _, k := range keys {
 		f, ok := m[k]
