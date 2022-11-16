@@ -20,7 +20,7 @@ func TestRun(t *testing.T) {
 			fmt.Println("Middleware A After", time.Now().UnixNano())
 		}()
 
-		fmt.Println("Middleware A Before", time.Now().UnixNano())
+		fmt.Println("Middleware A Before", time.Now().UnixNano(), fmt.Sprintf("%p", next))
 		next()
 	}))
 
@@ -29,7 +29,7 @@ func TestRun(t *testing.T) {
 			fmt.Println("Middleware B Defer After", time.Now().UnixNano())
 		}()
 
-		fmt.Println("Middleware B Before", time.Now().UnixNano())
+		fmt.Println("Middleware B Before", time.Now().UnixNano(), fmt.Sprintf("%p", next))
 		next()
 		fmt.Println("Middleware B After", time.Now().UnixNano())
 	}))

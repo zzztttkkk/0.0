@@ -1,8 +1,12 @@
 package h2tp
 
 import (
-	"github.com/julienschmidt/httprouter"
+	"fmt"
 	"net/http"
+	"strings"
+
+	"github.com/julienschmidt/httprouter"
+	"github.com/zzztttkkk/0.0/internal/utils"
 )
 
 type Router struct {
@@ -45,35 +49,99 @@ func (r *Router) mustBeModifiable() {
 	}
 }
 
-func (r *Router) Register(method string, pattern string, handler Handler) {
+var AllMethods = []string{
+	http.MethodGet,
+	http.MethodHead,
+	http.MethodPost,
+	http.MethodPut,
+	http.MethodPatch,
+	http.MethodDelete,
+	http.MethodConnect,
+	http.MethodOptions,
+	http.MethodTrace,
+}
+
+func (r *Router) Register(methods string, pattern string, handler Handler) {
 	r.mustBeModifiable()
 
-	r.internal.Handle(method, pattern, func(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
-		rctx := RequestCtx{
-			Request:        request,
-			ResponseWriter: writer,
-			PathParams:     params,
-			middlewareIdx:  -1,
+	var temp []string
+	if methods == "*" {
+		temp = AllMethods
+	} else {
+		for _, part := range strings.Split(methods, ",") {
+			part = strings.ToUpper(strings.TrimSpace(part))
+			if utils.SliceFind(AllMethods, part) < 0 {
+				panic(fmt.Errorf("unknown method, %s", part))
+			}
+			temp = append(temp, part)
 		}
-		handler = r.makeMiddlewareWrapper(handler)
-		handler.Handle(&rctx)
-	})
+	}
+
+	for _, method := range temp {
+		r.internal.Handle(method, pattern, func(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
+			rctx := RequestCtx{
+				Request:        request,
+				ResponseWriter: writer,
+				PathParams:     params,
+				middlewareIdx:  -1,
+			}
+			handler = r.makeMiddlewareWrapper(handler)
+			handler.Handle(&rctx)
+		})
+	}
 }
 
 func Run(addr string, routers map[string]*Router) error {
+	if len(routers) < 1 {
+		routers = map[string]*Router{}
+		router := NewRouter()
+		routers["*"] = router
+	}
+
 	for _, router := range routers {
 		router.frozen = true
 	}
 
-	var defaultRouter *Router
-	for _, key := range []string{"", "*", "default"} {
-		if defaultRouter != nil {
-			break
+	defaultRouter := routers["*"]
+	delete(routers, "*")
+
+	var peekRouter func(r *http.Request) *Router
+	if len(routers) == 0 {
+		peekRouter = func(_ *http.Request) *Router {
+			return defaultRouter
 		}
-		defaultRouter = routers[key]
+	} else {
+		if len(routers) == 1 {
+			host := utils.MapKeys(routers)[0]
+			router := utils.MapValues(routers)[0]
+			peekRouter = func(req *http.Request) *Router {
+				if req.Host != host {
+					return nil
+				}
+				return router
+			}
+		} else {
+			if len(routers) < 6 {
+				_hosts := utils.MapKeys(routers)
+				_routers := utils.MapValues(routers)
+				peekRouter = func(r *http.Request) *Router {
+					for i, host := range _hosts {
+						if r.Host == host {
+							return _routers[i]
+						}
+					}
+					return nil
+				}
+			} else {
+				peekRouter = func(r *http.Request) *Router {
+					return routers[r.Host]
+				}
+			}
+		}
 	}
+
 	return http.ListenAndServe(addr, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		router := routers[request.Host]
+		router := peekRouter(request)
 		if router == nil {
 			router = defaultRouter
 		}
