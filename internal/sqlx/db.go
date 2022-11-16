@@ -31,6 +31,9 @@ func OpenDB(driver Driver, dsn string, readonly bool, logger Logger) (*DB, error
 }
 
 func MustOpenDB(driver Driver, dsn string, readonly bool, logger Logger) *DB {
+	if !strings.HasPrefix(dsn, "postgres://") {
+		dsn = "postgres://" + dsn
+	}
 	db, err := OpenDB(driver, dsn, readonly, logger)
 	if err != nil {
 		panic(err)
