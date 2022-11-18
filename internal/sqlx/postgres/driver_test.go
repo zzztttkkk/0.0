@@ -17,11 +17,15 @@ type Base struct {
 
 type User struct {
 	Base
-	Id       uint64        `db:"id,ddl=numeric(19) check (id >= 0)"`
-	Uuid     pgtype.UUID   `db:"uuid,default=uuid"`
-	Name     string        `db:"name"`
-	Nickname string        `db:"nickname"`
+	Id       uint64        `db:"id,primary"`
+	Uuid     pgtype.UUID   `db:"uuid,default=uuid_generate_v4(),unique"`
+	Name     string        `db:"name,length=~30,unique"`
+	Nickname string        `db:"nickname,length=~30"`
 	Ext      pgtype.Hstore `db:"ext"`
+}
+
+func (_ User) DDLId() *FieldDefinition {
+	return &FieldDefinition{}
 }
 
 func TestPostgres(t *testing.T) {
