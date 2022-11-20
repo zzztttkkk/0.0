@@ -24,12 +24,13 @@ type User struct {
 	Ext      pgtype.Hstore `db:"ext"`
 }
 
-func (_ User) DDLId() *FieldDefinition {
-	return &FieldDefinition{}
+func (_ User) DDLId() *sqlx.FieldDefinition {
+	return nil
 }
 
 func TestPostgres(t *testing.T) {
-	db := sqlx.MustOpenDB(&Driver{}, "ztk:123456@localhost:5432/local_test", false, nil)
+	db := Open("ztk:123456@localhost:5432/local_test", false, nil)
+	db.EnableHStore(context.Background()).EnableUUID(context.Background())
 
 	sum := 0.0
 	err := db.FetchOne(context.Background(), "select 1 + ${a}::float + ${a}::float as sum", sqlx.Params{"a": 4.9}, &sum)
@@ -42,5 +43,5 @@ func TestPostgres(t *testing.T) {
 	var num uint8 = 255
 	fmt.Println(num, math.MaxUint32)
 
-	db.Driver().DDL(User{})
+	db.CreateTable(User{})
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"strings"
 )
 
@@ -148,36 +147,6 @@ func (db *DB) Prepare(ctx context.Context, query string) (*Stmt, error) {
 		keys:   keys,
 		logger: db.logger,
 	}, nil
-}
-
-type FiledInfo struct {
-	Name    string
-	SqlType string
-	Ext     string
-}
-
-func (db *DB) CreateTable(name string, fields ...FiledInfo) {
-	sb := strings.Builder{}
-	sb.WriteString("CREATE TABLE IF NOT EXISTS ")
-	sb.WriteString(name)
-	sb.WriteString(" (\n")
-
-	for idx, info := range fields {
-		sb.WriteRune('\t')
-		sb.WriteString(info.Name)
-		sb.WriteRune(' ')
-		sb.WriteString(info.SqlType)
-		if len(info.Ext) > 0 {
-			sb.WriteRune(' ')
-			sb.WriteString(info.Ext)
-		}
-		if idx < len(fields)-1 {
-			sb.WriteRune(',')
-		}
-		sb.WriteRune('\n')
-	}
-
-	fmt.Println(sb.String())
 }
 
 var _ Executor = (*DB)(nil)

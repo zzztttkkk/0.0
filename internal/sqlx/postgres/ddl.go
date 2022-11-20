@@ -1,86 +1,36 @@
 package postgres
 
 import (
-	"database/sql"
 	"fmt"
 	"github.com/zzztttkkk/0.0/internal/sqlx"
+	"github.com/zzztttkkk/0.0/internal/utils"
 	"reflect"
 	"strconv"
 )
 
-type FieldDefinition struct {
-	SqlType  string
-	Default  sql.NullString
-	Check    sql.NullString
-	Nullable bool
-	Unique   bool
-}
+func (_ *Driver) DDL(info *utils.FieldInfo) *sqlx.FieldDefinition {
+	var fd = &sqlx.FieldDefinition{}
 
-func (fd *FieldDefinition) CheckAnd(v string, args ...any) {
-	v = fmt.Sprintf(v, args)
-	fd.Check.Valid = true
-	if len(fd.Check.String) < 1 {
-		fd.Check.String = v
-	} else {
-		fd.Check.String = and(fd.Check.String, v)
-	}
-}
+	fd.SqlType = psqlType(info.Name, info.Field.Type, info.Options, fd)
 
-func (fd *FieldDefinition) CheckOr(v string, args ...any) {
-	v = fmt.Sprintf(v, args)
-
-	fd.Check.Valid = true
-	if len(fd.Check.String) < 1 {
-		fd.Check.String = v
-	} else {
-		fd.Check.String = or(fd.Check.String, v)
-	}
-}
-
-func and(l, r string) string {
-	return fmt.Sprintf("((%s) AND (%s))", l, r)
-}
-
-func or(l, r string) string {
-	return fmt.Sprintf("((%s) OR (%s))", l, r)
-}
-
-func (my *Driver) DDL(v any) string {
-	val := reflect.ValueOf(v)
-	if val.Kind() != reflect.Struct {
-		panic(fmt.Errorf("`%+v` is not a struct", v))
-	}
-
-	smap := sqlx.DBReflectMapper.TypeMap(val.Type())
-	var fields []*FieldDefinition
-	for _, info := range smap.Index {
-		if info.Path != info.Name || info.Embedded {
-			continue
-		}
-		var fd *FieldDefinition
-		fv := val.MethodByName(fmt.Sprintf("DDL%s", info.Field.Name))
-		if fv.IsValid() && fv.Type().Out(0) == reflect.TypeOf(fd) {
-			temp := fv.Call(nil)
-			if len(temp) == 1 {
-				fd = temp[0].Interface().(*FieldDefinition)
+	_, incr := info.Options["incr"]
+	if incr {
+		switch fd.SqlType {
+		case "smallint":
+			{
+				fd.SqlType = "smallserial"
+			}
+		case "integer":
+			{
+				fd.SqlType = "serial"
+			}
+		case "bigint":
+			{
+				fd.SqlType = "bigserial"
 			}
 		}
-
-		if fd != nil {
-			fields = append(fields, fd)
-			continue
-		}
-
-		fd = &FieldDefinition{}
-		fd.SqlType = psqlType(info.Name, info.Zero.Type(), info.Options, fd)
-		_, nullable := info.Options["nullable"]
-		fd.Nullable = nullable
-		_, unique := info.Options["unique"]
-		fd.Unique = unique
-
-		fields = append(fields, fd)
 	}
-	return ""
+	return fd
 }
 
 func getLength(v string) (int, bool) {
@@ -98,7 +48,7 @@ func getLength(v string) (int, bool) {
 	return int(n), true
 }
 
-func psqlType(name string, t reflect.Type, opts map[string]string, fd *FieldDefinition) string {
+func psqlType(name string, t reflect.Type, opts map[string]string, fd *sqlx.FieldDefinition) string {
 	switch t.Kind() {
 	case reflect.Int, reflect.Int64:
 		return "bigint"
