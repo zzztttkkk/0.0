@@ -1,11 +1,14 @@
 package postgres
 
 import (
+	"database/sql"
 	"fmt"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/zzztttkkk/0.0/internal/sqlx"
 	"github.com/zzztttkkk/0.0/internal/utils"
 	"reflect"
 	"strconv"
+	"time"
 )
 
 func (_ *Driver) DDL(info *utils.FieldInfo) *sqlx.FieldDefinition {
@@ -48,7 +51,35 @@ func getLength(v string) (int, bool) {
 	return int(n), true
 }
 
+var (
+	_UuidType   = reflect.TypeOf((*pgtype.UUID)(nil)).Elem()
+	_HStoreType = reflect.TypeOf((*pgtype.Hstore)(nil)).Elem()
+	_DateType   = reflect.TypeOf((*pgtype.Date)(nil)).Elem()
+	_NullTypes  = make(map[reflect.Type]reflect.Type)
+)
+
+func init() {
+	addToMap := func(a, b any) {
+		_NullTypes[reflect.TypeOf(a)] = reflect.TypeOf(b)
+	}
+	addToMap(sql.NullString{}, "")
+	addToMap(sql.NullBool{}, false)
+	addToMap(sql.NullFloat64{}, float64(0))
+	addToMap(sql.NullInt16{}, int16(0))
+	addToMap(sql.NullInt32{}, int32(0))
+	addToMap(sql.NullTime{}, time.Now())
+	addToMap(sql.NullByte{}, uint8(0))
+}
+
 func psqlType(name string, t reflect.Type, opts map[string]string, fd *sqlx.FieldDefinition) string {
+	if t == _HStoreType {
+		return "hstore"
+	}
+
+	if t == _UuidType {
+		return "uuid"
+	}
+
 	switch t.Kind() {
 	case reflect.Int, reflect.Int64:
 		return "bigint"
@@ -62,7 +93,7 @@ func psqlType(name string, t reflect.Type, opts map[string]string, fd *sqlx.Fiel
 		return "integer"
 	case reflect.Uint, reflect.Uint64:
 		fd.CheckAnd("%s >= 0", name)
-		return "numeric(19)"
+		return "numeric(20)"
 	case reflect.Uint8:
 		fd.CheckAnd("%s < 256", name)
 		fd.CheckAnd("%s >= 0", name)
@@ -91,19 +122,32 @@ func psqlType(name string, t reflect.Type, opts map[string]string, fd *sqlx.Fiel
 			}
 			return fmt.Sprintf("varchar(%d)", length)
 		}
-	case reflect.Slice:
-		{
-			// bytes
-			if t.Elem().Kind() == reflect.Uint8 {
-
-			}
-		}
 	case reflect.Bool:
 		return "boolean"
 	case reflect.Float32:
 		return "real"
 	case reflect.Float64:
 		return "double precision"
+	case reflect.Slice:
+		{
+			// bytes
+			if t.Elem().Kind() == reflect.Uint8 {
+				return "bytea"
+			}
+
+			eleSqlType := psqlType(name, t.Elem(), opts, nil)
+			return fmt.Sprintf("[]%s", eleSqlType)
+		}
+	case reflect.Struct:
+		{
+			realType := _NullTypes[t]
+			if realType != nil {
+				if fd != nil {
+					fd.Nullable = true
+				}
+				return psqlType(name, realType, opts, fd)
+			}
+		}
 	}
 	return ""
 }

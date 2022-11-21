@@ -2,8 +2,8 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"math"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -17,11 +17,11 @@ type Base struct {
 
 type User struct {
 	Base
-	Id       uint64        `db:"id,primary"`
-	Uuid     pgtype.UUID   `db:"uuid,default=uuid_generate_v4(),unique"`
-	Name     string        `db:"name,length=~30,unique"`
-	Nickname string        `db:"nickname,length=~30"`
-	Ext      pgtype.Hstore `db:"ext"`
+	Id       uint64         `db:"id,primary"`
+	Uuid     pgtype.UUID    `db:"uuid,default=uuid_generate_v4(),unique"`
+	Name     string         `db:"name,length=~30,unique"`
+	Nickname sql.NullString `db:"nickname,length=~30"`
+	Ext      pgtype.Hstore  `db:"ext"`
 }
 
 func (_ User) DDLId() *sqlx.FieldDefinition {
@@ -39,9 +39,6 @@ func TestPostgres(t *testing.T) {
 		return
 	}
 	fmt.Println(sum)
-
-	var num uint8 = 255
-	fmt.Println(num, math.MaxUint32)
 
 	db.CreateTable(User{})
 }

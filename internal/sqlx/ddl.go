@@ -15,15 +15,40 @@ func or(l, r string) string {
 	return fmt.Sprintf("((%s) OR (%s))", l, r)
 }
 
+type IndexFieldOrderType bool
+
+const (
+	IndexFieldOrderDesc = IndexFieldOrderType(false)
+	IndexFieldOrderAsc  = IndexFieldOrderType(true)
+)
+
+type IndexField struct {
+	Name        string
+	OrderType   IndexFieldOrderType
+	SortInIndex int
+	appendIdx   int
+}
+
 type FieldDefinition struct {
+	Name     string
 	SqlType  string
 	Default  sql.NullString
 	Check    sql.NullString
 	Nullable bool
 	Unique   bool
+	Indexes  []IndexField
+}
+
+func (fd *FieldDefinition) AppendIndex(field IndexField) {
+	fd.Indexes = append(fd.Indexes, field)
+	fd.Indexes[len(fd.Indexes)-1].appendIdx = len(fd.Indexes) - 1
 }
 
 func (fd *FieldDefinition) CheckAnd(v string, args ...any) {
+	if fd == nil {
+		return
+	}
+
 	v = fmt.Sprintf(v, args)
 	fd.Check.Valid = true
 	if len(fd.Check.String) < 1 {
@@ -70,6 +95,7 @@ func (db *DB) CreateTable(v any) {
 		if fd == nil {
 			fd = db.driver.DDL(info)
 		}
+		fd.Name = info.Name
 		fields = append(fields, fd)
 	}
 
@@ -79,5 +105,9 @@ func (db *DB) CreateTable(v any) {
 
 	if len(fields) < 1 {
 		panic(fmt.Errorf("0.0/internal/sqlx: `%+v` got empty filed definitions", v))
+	}
+
+	for _, field := range fields {
+		fmt.Println(field.Name, field.SqlType)
 	}
 }
