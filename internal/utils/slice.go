@@ -18,3 +18,11 @@ func SliceFilter[T any](a []T, fn func(T) bool) []T {
 	}
 	return r
 }
+
+func SliceMap[T any, V any](a []T, fn func(int, T) V) []V {
+	var r = make([]V, 0, len(a))
+	for i, ele := range a {
+		r = append(r, fn(i, ele))
+	}
+	return r
+}

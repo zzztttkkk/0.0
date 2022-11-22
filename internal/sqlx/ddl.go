@@ -1,10 +1,11 @@
 package sqlx
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
 	"github.com/zzztttkkk/0.0/internal/utils"
 	"reflect"
+	"strings"
 )
 
 func and(l, r string) string {
@@ -30,13 +31,14 @@ type IndexField struct {
 }
 
 type FieldDefinition struct {
-	Name     string
-	SqlType  string
-	Default  sql.NullString
-	Check    sql.NullString
-	Nullable bool
-	Unique   bool
-	Indexes  []IndexField
+	Name       string
+	SqlType    string
+	PrimaryKey bool
+	Default    string
+	Check      string
+	Nullable   bool
+	Unique     bool
+	Indexes    []IndexField
 }
 
 func (fd *FieldDefinition) AppendIndex(field IndexField) {
@@ -49,27 +51,43 @@ func (fd *FieldDefinition) CheckAnd(v string, args ...any) {
 		return
 	}
 
-	v = fmt.Sprintf(v, args)
-	fd.Check.Valid = true
-	if len(fd.Check.String) < 1 {
-		fd.Check.String = v
+	v = fmt.Sprintf(v, args...)
+	if len(fd.Check) < 1 {
+		fd.Check = v
 	} else {
-		fd.Check.String = and(fd.Check.String, v)
+		fd.Check = and(fd.Check, v)
 	}
 }
 
 func (fd *FieldDefinition) CheckOr(v string, args ...any) {
 	v = fmt.Sprintf(v, args)
 
-	fd.Check.Valid = true
-	if len(fd.Check.String) < 1 {
-		fd.Check.String = v
+	if len(fd.Check) < 1 {
+		fd.Check = v
 	} else {
-		fd.Check.String = or(fd.Check.String, v)
+		fd.Check = or(fd.Check, v)
 	}
 }
 
-func (db *DB) CreateTable(v any) {
+func (db *DB) TableName(val reflect.Value) string {
+	var tablename string
+	if tableNameFn := val.MethodByName("TableName"); tableNameFn.IsValid() {
+		if fn, _ := tableNameFn.Interface().(func() string); fn != nil {
+			tablename = fn()
+		}
+	}
+	if len(tablename) < 1 {
+		tablename = strings.ToLower(val.Type().Name())
+	}
+	return tablename
+}
+
+func (db *DB) DropTable(ctx context.Context, name string) error {
+	_, err := db.Execute(ctx, fmt.Sprintf("%s TABLE %s", "DROP", name), nil)
+	return err
+}
+
+func (db *DB) CreateTable(ctx context.Context, v any) error {
 	val := reflect.ValueOf(v)
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
@@ -95,19 +113,91 @@ func (db *DB) CreateTable(v any) {
 		if fd == nil {
 			fd = db.driver.DDL(info)
 		}
+
+		if _, ok := info.Options["nullable"]; ok {
+			fd.Nullable = true
+		}
+
+		if _, ok := info.Options["unique"]; ok {
+			fd.Unique = true
+		}
+
+		if _, ok := info.Options["primary"]; ok {
+			fd.PrimaryKey = true
+		}
+
+		if dv, ok := info.Options["default"]; ok {
+			fd.Default = dv
+		}
+
 		fd.Name = info.Name
 		fields = append(fields, fd)
 	}
 
-	fields = utils.SliceFilter(fields, func(v *FieldDefinition) bool {
-		return v != nil
-	})
+	var primaryKeys []*FieldDefinition
+
+	fields = utils.SliceMap(
+		utils.SliceFilter(fields, func(v *FieldDefinition) bool { return v != nil }),
+
+		func(_ int, v *FieldDefinition) *FieldDefinition {
+			if v.PrimaryKey {
+				primaryKeys = append(primaryKeys, v)
+			}
+			return v
+		},
+	)
 
 	if len(fields) < 1 {
 		panic(fmt.Errorf("0.0/internal/sqlx: `%+v` got empty filed definitions", v))
 	}
 
-	for _, field := range fields {
-		fmt.Println(field.Name, field.SqlType)
+	if len(primaryKeys) < 1 {
+		panic(fmt.Errorf("0.0/internal/sqlx: `%+v` got empty primary keys", v))
 	}
+
+	tablename := db.TableName(val)
+
+	var sb strings.Builder
+	sb.WriteString("CREATE TABLE IF NOT EXISTS ")
+	sb.WriteString(tablename)
+	sb.WriteString(" (\r\n")
+
+	for _, field := range fields {
+		sb.WriteRune('\t')
+		sb.WriteString(field.Name)
+		sb.WriteRune(' ')
+		sb.WriteString(field.SqlType)
+
+		if field.Unique {
+			sb.WriteString(" UNIQUE")
+		}
+
+		if !field.Nullable {
+			sb.WriteString(" NOT NULL")
+		}
+
+		if len(field.Check) > 0 {
+			sb.WriteString(" CHECK (")
+			sb.WriteString(field.Check)
+			sb.WriteRune(')')
+		}
+
+		if len(field.Default) > 0 {
+			sb.WriteString(" DEFAULT ")
+			sb.WriteString(field.Default)
+		}
+
+		sb.WriteString(",\r\n")
+	}
+
+	sb.WriteString("\tprimary key (")
+	sb.WriteString(strings.Join(utils.SliceMap(primaryKeys, func(_ int, fd *FieldDefinition) string { return fd.Name }), ","))
+	sb.WriteString(")\r\n)\r\n")
+
+	ddl := sb.String()
+	if db.logger != nil {
+		db.logger.Printf(ddl)
+	}
+	_, err := db.Execute(ctx, ddl, nil)
+	return err
 }

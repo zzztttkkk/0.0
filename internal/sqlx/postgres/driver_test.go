@@ -4,31 +4,23 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/zzztttkkk/0.0/internal/sqlx"
 	"testing"
 	"time"
 )
 
 type Base struct {
-	CreatedAt uint64 `db:"created_at,default=(extract(epoch from now()) * 1000)::bigint"`
-	DeletedAt uint64 `db:"deleted_at"`
-}
-
-type User struct {
-	Base
-	Id       uint64         `db:"id,primary"`
-	Uuid     pgtype.UUID    `db:"uuid,default=uuid_generate_v4(),unique"`
-	Name     string         `db:"name,length=~30,unique"`
-	Nickname sql.NullString `db:"nickname,length=~30"`
-	Ext      pgtype.Hstore  `db:"ext"`
+	CreatedAt uint64        `db:"created_at,default=(extract(epoch from now()) * 1000)::bigint"`
+	DeletedAt sql.NullInt64 `db:"deleted_at,nullable"`
 }
 
 type Xyz struct {
-	V1 int64     `db:"v1"`
-	V2 time.Time `db:"v2"`
-	V3 AnyJSON   `db:"v3"`
-	V4 int64     `db:"v4"`
+	Base
+	V1 int64         `db:"v1,primary,incr,unique"`
+	V2 time.Time     `db:"v2,default=now()"`
+	V3 AnyJSON       `db:"v3,sqltype=json,nullable"`
+	V4 sql.NullInt64 `db:"v4,nullable"`
+	V5 string        `db:"v5,length=~30,default=''"`
 }
 
 func TestPostgres(t *testing.T) {
@@ -43,9 +35,13 @@ func TestPostgres(t *testing.T) {
 	}
 	fmt.Println(sum)
 
+	fmt.Println(db.CreateTable(context.Background(), Xyz{}))
+
 	var xyz Xyz
 	err = db.FetchOne(context.Background(), "select * from xyz where v1=${v1}", sqlx.Params{"v1": 2}, &xyz)
-	fmt.Println(err, xyz)
-
-	db.CreateTable(User{})
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Printf("%+v\r\n", xyz)
+	}
 }

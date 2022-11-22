@@ -10,10 +10,15 @@ import (
 )
 
 type AnyJSON struct {
-	Val any
+	Valid bool
+	Val   any
 }
 
 func (v *AnyJSON) Scan(src any) error {
+	if src == nil {
+		return nil
+	}
+
 	var ds []byte
 	switch ns := src.(type) {
 	case string:
@@ -23,10 +28,14 @@ func (v *AnyJSON) Scan(src any) error {
 	default:
 		return fmt.Errorf("bad value type")
 	}
+	v.Valid = true
 	return json.Unmarshal(ds, &v.Val)
 }
 
 func (v *AnyJSON) Value() (driver.Value, error) {
+	if !v.Valid {
+		return nil, nil
+	}
 	return json.Marshal(v.Val)
 }
 
@@ -36,9 +45,14 @@ var _ sql.Scanner = (*AnyJSON)(nil)
 var (
 	ErrorUnexpectedJSONValue = errors.New("0.0/internal/sqlx/postgres: unexpected value")
 	ErrorUnexpectedJSONKey   = errors.New("0.0/internal/sqlx/postgres: unexpected key")
+	ErrorEmptyAnyJSON        = errors.New("0.0/internal/sqlx/postgres: empty AnyJSON")
 )
 
 func (v *AnyJSON) Peek(keys ...any) (any, error) {
+	if !v.Valid {
+		return nil, ErrorEmptyAnyJSON
+	}
+
 	var current = v.Val
 
 	for _, key := range keys {

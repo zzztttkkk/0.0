@@ -8,6 +8,7 @@ import (
 	"github.com/zzztttkkk/0.0/internal/utils"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -52,11 +53,12 @@ func getLength(v string) (int, bool) {
 }
 
 var (
-	_UuidType   = reflect.TypeOf((*pgtype.UUID)(nil)).Elem()
-	_HStoreType = reflect.TypeOf((*pgtype.Hstore)(nil)).Elem()
-	_DateType   = reflect.TypeOf((*pgtype.Date)(nil)).Elem()
-	_NullTypes  = make(map[reflect.Type]reflect.Type)
-	_TimeType   = reflect.TypeOf((*time.Time)(nil)).Elem()
+	_UuidType    = reflect.TypeOf((*pgtype.UUID)(nil)).Elem()
+	_HStoreType  = reflect.TypeOf((*pgtype.Hstore)(nil)).Elem()
+	_DateType    = reflect.TypeOf((*pgtype.Date)(nil)).Elem()
+	_NullTypes   = make(map[reflect.Type]reflect.Type)
+	_TimeType    = reflect.TypeOf((*time.Time)(nil)).Elem()
+	_AnyJsonType = reflect.TypeOf((*AnyJSON)(nil)).Elem()
 )
 
 func init() {
@@ -68,21 +70,26 @@ func init() {
 	addToMap(sql.NullFloat64{}, float64(0))
 	addToMap(sql.NullInt16{}, int16(0))
 	addToMap(sql.NullInt32{}, int32(0))
+	addToMap(sql.NullInt64{}, int64(0))
 	addToMap(sql.NullTime{}, time.Now())
 	addToMap(sql.NullByte{}, uint8(0))
 }
 
 func psqlType(name string, t reflect.Type, opts map[string]string, fd *sqlx.FieldDefinition) string {
-	if t == _HStoreType {
+	userType := strings.TrimSpace(opts["sqltype"])
+	if len(userType) > 0 {
+		return userType
+	}
+
+	switch t {
+	case _HStoreType:
 		return "hstore"
-	}
-
-	if t == _UuidType {
+	case _UuidType:
 		return "uuid"
-	}
-
-	if t == _TimeType || t == _DateType {
+	case _TimeType, _DateType:
 		return "timestamp"
+	case _AnyJsonType:
+		return "jsonb"
 	}
 
 	switch t.Kind() {
