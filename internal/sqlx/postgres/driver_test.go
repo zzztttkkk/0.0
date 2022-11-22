@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/zzztttkkk/0.0/internal/sqlx"
 	"testing"
+	"time"
 )
 
 type Base struct {
@@ -23,6 +24,13 @@ type User struct {
 	Ext      pgtype.Hstore  `db:"ext"`
 }
 
+type Xyz struct {
+	V1 int64     `db:"v1"`
+	V2 time.Time `db:"v2"`
+	V3 AnyJSON   `db:"v3"`
+	V4 int64     `db:"v4"`
+}
+
 func TestPostgres(t *testing.T) {
 	db := Open("postgres:123456@localhost:5432/local_test", false, nil)
 	db.EnableHStore(context.Background()).EnableUUID(context.Background())
@@ -35,9 +43,9 @@ func TestPostgres(t *testing.T) {
 	}
 	fmt.Println(sum)
 
-	var tv AnyJSON
-	err = db.FetchOne(context.Background(), "select v3 from xyz where v1=${v1}", sqlx.Params{"v1": 2}, sqlx.DirectDist{&tv})
-	fmt.Println(err, tv.Val)
+	var xyz Xyz
+	err = db.FetchOne(context.Background(), "select * from xyz where v1=${v1}", sqlx.Params{"v1": 2}, &xyz)
+	fmt.Println(err, xyz)
 
-	//db.CreateTable(User{})
+	db.CreateTable(User{})
 }
