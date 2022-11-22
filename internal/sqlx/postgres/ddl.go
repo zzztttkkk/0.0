@@ -56,6 +56,7 @@ var (
 	_HStoreType = reflect.TypeOf((*pgtype.Hstore)(nil)).Elem()
 	_DateType   = reflect.TypeOf((*pgtype.Date)(nil)).Elem()
 	_NullTypes  = make(map[reflect.Type]reflect.Type)
+	_TimeType   = reflect.TypeOf((*time.Time)(nil)).Elem()
 )
 
 func init() {
@@ -78,6 +79,10 @@ func psqlType(name string, t reflect.Type, opts map[string]string, fd *sqlx.Fiel
 
 	if t == _UuidType {
 		return "uuid"
+	}
+
+	if t == _TimeType || t == _DateType {
+		return "timestamp"
 	}
 
 	switch t.Kind() {

@@ -4,14 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"testing"
-
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/zzztttkkk/0.0/internal/sqlx"
+	"testing"
 )
 
 type Base struct {
-	CreatedAt uint64 `db:"created_at"`
+	CreatedAt uint64 `db:"created_at,default=(extract(epoch from now()) * 1000)::bigint"`
 	DeletedAt uint64 `db:"deleted_at"`
 }
 
@@ -24,12 +23,8 @@ type User struct {
 	Ext      pgtype.Hstore  `db:"ext"`
 }
 
-func (_ User) DDLId() *sqlx.FieldDefinition {
-	return nil
-}
-
 func TestPostgres(t *testing.T) {
-	db := Open("ztk:123456@localhost:5432/local_test", false, nil)
+	db := Open("postgres:123456@localhost:5432/local_test", false, nil)
 	db.EnableHStore(context.Background()).EnableUUID(context.Background())
 
 	sum := 0.0
@@ -40,5 +35,9 @@ func TestPostgres(t *testing.T) {
 	}
 	fmt.Println(sum)
 
-	db.CreateTable(User{})
+	var tv AnyJSON
+	err = db.FetchOne(context.Background(), "select v3 from xyz where v1=${v1}", sqlx.Params{"v1": 2}, sqlx.DirectDist{&tv})
+	fmt.Println(err, tv.Val)
+
+	//db.CreateTable(User{})
 }
