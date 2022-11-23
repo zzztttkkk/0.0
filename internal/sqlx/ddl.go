@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/zzztttkkk/0.0/internal/utils"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -99,26 +100,61 @@ func parseIndex(v string) []*IndexField {
 
 	for _, fi := range strings.Split(v, "|") {
 		fi = strings.TrimSpace(fi)
-		parts := strings.Split(fi, ";")
+		parts := utils.SliceFilter(
+			utils.SliceMap(strings.Split(fi, ","), func(_ int, v string) string { return strings.TrimSpace(v) }),
+			func(v string) bool { return len(v) > 0 },
+		)
 
 		fv := &IndexField{}
+		var (
+			ns = ""
+			os = "desc"
+			ss = "0"
+		)
 
-		if len(parts) == 1 {
-			fv.Name = parts[0]
-		} else if len(parts) == 2 {
-			fv.Name = parts[0]
-			switch strings.ToLower(parts[1]) {
-			case "desc":
-				fv.OrderType = IndexFieldOrderDesc
-			case "asc":
-				fv.OrderType = IndexFieldOrderAsc
-			default:
-				fv.OrderType = IndexFieldOrderDesc
+		switch len(parts) {
+		case 1:
+			ns = parts[0]
+		case 2:
+			ns, os = parts[0], parts[1]
+			if _, e := strconv.ParseInt(os, 10, 32); e == nil {
+				ss = os
+				os = "desc"
 			}
+		case 3:
+			ns, os, ss = parts[0], parts[1], parts[2]
+		default:
+			panic(fmt.Errorf("bad index tag value, `%s`", fi))
 		}
+
+		if len(ns) < 1 {
+			panic(fmt.Errorf("empty index name, `%s`", fi))
+		}
+
+		fv.Name = ns
+
+		switch strings.ToLower(os) {
+		case "desc":
+			fv.OrderType = IndexFieldOrderDesc
+		case "asc":
+			fv.OrderType = IndexFieldOrderAsc
+		default:
+			panic(fmt.Errorf("bad order type, `%s`", fi))
+		}
+
+		v, e := strconv.ParseInt(ss, 10, 32)
+		if e != nil {
+			panic("")
+		}
+		fv.SortInIndex = int(v)
+
 		fs = append(fs, fv)
 	}
 	return fs
+}
+
+func (db *DB) ensureIndexes() {
+
 }
 
 func (db *DB) CreateTable(ctx context.Context, v any) error {

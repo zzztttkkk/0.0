@@ -310,7 +310,7 @@ func parseName(field reflect.StructField, tagName string, mapFunc, tagMapFunc ma
 	}
 
 	// finally, split the options from the name
-	parts := strings.Split(tag, ",")
+	parts := strings.Split(tag, ";")
 	fieldName = parts[0]
 
 	return tag, fieldName
@@ -318,7 +318,7 @@ func parseName(field reflect.StructField, tagName string, mapFunc, tagMapFunc ma
 
 // parseOptions parses options out of a tag string, skipping the name
 func parseOptions(tag string) map[string]string {
-	parts := strings.Split(tag, ",")
+	parts := strings.Split(tag, ";")
 	options := make(map[string]string, len(parts))
 	if len(parts) > 1 {
 		for _, opt := range parts[1:] {
