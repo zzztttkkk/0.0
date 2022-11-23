@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/zzztttkkk/0.0/internal/sqlx"
@@ -76,6 +77,14 @@ func init() {
 }
 
 func psqlType(name string, t reflect.Type, opts map[string]string, fd *sqlx.FieldDefinition) string {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	if t.Kind() == reflect.Ptr {
+		panic(errors.New(`bad field type, always pointer`))
+	}
+
 	userType := strings.TrimSpace(opts["sqltype"])
 	if len(userType) > 0 {
 		return userType
@@ -161,5 +170,5 @@ func psqlType(name string, t reflect.Type, opts map[string]string, fd *sqlx.Fiel
 			}
 		}
 	}
-	return ""
+	panic(fmt.Errorf("unexpect field type, %s.%s", t.PkgPath(), t.Name()))
 }

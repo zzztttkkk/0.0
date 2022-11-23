@@ -16,11 +16,11 @@ type Base struct {
 
 type Xyz struct {
 	Base
-	V1 int64         `db:"v1,primary,incr,unique"`
-	V2 time.Time     `db:"v2,default=now()"`
-	V3 AnyJSON       `db:"v3,sqltype=json,nullable"`
-	V4 sql.NullInt64 `db:"v4,nullable"`
-	V5 string        `db:"v5,length=~30,default=''"`
+	V1 int64     `db:"v1,primary,incr,unique"`
+	V2 time.Time `db:"v2,default=now(),index=x1_unique|x2_unique;asc"`
+	V3 *AnyJSON  `db:"v3,sqltype=json,nullable"`
+	V4 *uint64   `db:"v4,nullable"`
+	V5 string    `db:"v5,length=~30,default='',index=x1_unique"`
 }
 
 func TestPostgres(t *testing.T) {

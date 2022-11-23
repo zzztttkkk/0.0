@@ -27,7 +27,11 @@ type IndexField struct {
 	Name        string
 	OrderType   IndexFieldOrderType
 	SortInIndex int
-	appendIdx   int
+}
+
+type IndexInfo struct {
+	Fields []*IndexField
+	Unique bool
 }
 
 type FieldDefinition struct {
@@ -43,7 +47,6 @@ type FieldDefinition struct {
 
 func (fd *FieldDefinition) AppendIndex(field IndexField) {
 	fd.Indexes = append(fd.Indexes, field)
-	fd.Indexes[len(fd.Indexes)-1].appendIdx = len(fd.Indexes) - 1
 }
 
 func (fd *FieldDefinition) CheckAnd(v string, args ...any) {
@@ -85,6 +88,37 @@ func (db *DB) TableName(val reflect.Value) string {
 func (db *DB) DropTable(ctx context.Context, name string) error {
 	_, err := db.Execute(ctx, fmt.Sprintf("%s TABLE %s", "DROP", name), nil)
 	return err
+}
+
+func parseIndex(v string) []*IndexField {
+	if len(v) < 1 {
+		return nil
+	}
+
+	var fs []*IndexField
+
+	for _, fi := range strings.Split(v, "|") {
+		fi = strings.TrimSpace(fi)
+		parts := strings.Split(fi, ";")
+
+		fv := &IndexField{}
+
+		if len(parts) == 1 {
+			fv.Name = parts[0]
+		} else if len(parts) == 2 {
+			fv.Name = parts[0]
+			switch strings.ToLower(parts[1]) {
+			case "desc":
+				fv.OrderType = IndexFieldOrderDesc
+			case "asc":
+				fv.OrderType = IndexFieldOrderAsc
+			default:
+				fv.OrderType = IndexFieldOrderDesc
+			}
+		}
+		fs = append(fs, fv)
+	}
+	return fs
 }
 
 func (db *DB) CreateTable(ctx context.Context, v any) error {
@@ -129,6 +163,8 @@ func (db *DB) CreateTable(ctx context.Context, v any) error {
 		if dv, ok := info.Options["default"]; ok {
 			fd.Default = dv
 		}
+
+		parseIndex(info.Options["index"])
 
 		fd.Name = info.Name
 		fields = append(fields, fd)
