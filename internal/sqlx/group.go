@@ -220,7 +220,3 @@ func (g *Group) ReadonlyDB() *DB {
 func (g *Group) JustWritableDB(ctx context.Context) context.Context {
 	return context.WithValue(ctx, _KeyJustWDB, true)
 }
-
-//func (g *Group) CreateTable(ctx context.Context, model *Model) error {
-//	return g.w.CreateTable(ctx, model)
-//}

@@ -17,3 +17,6 @@
 /.idea
 /.vs
 /.vscode
+
+.config.toml
+.config.local.toml
