@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/zzztttkkk/0.0/internal/utils"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -25,14 +26,14 @@ const (
 )
 
 type IndexField struct {
-	Name        string
+	IndexName   string
+	FieldName   string
 	OrderType   IndexFieldOrderType
 	SortInIndex int
 }
 
 type IndexInfo struct {
 	Fields []*IndexField
-	Unique bool
 }
 
 type FieldDefinition struct {
@@ -91,7 +92,7 @@ func (db *DB) DropTable(ctx context.Context, name string) error {
 	return err
 }
 
-func parseIndex(v string) []*IndexField {
+func parseIndex(fieldName, v string) []*IndexField {
 	if len(v) < 1 {
 		return nil
 	}
@@ -131,7 +132,8 @@ func parseIndex(v string) []*IndexField {
 			panic(fmt.Errorf("empty index name, `%s`", fi))
 		}
 
-		fv.Name = ns
+		fv.IndexName = ns
+		fv.FieldName = fieldName
 
 		switch strings.ToLower(os) {
 		case "desc":
@@ -153,8 +155,52 @@ func parseIndex(v string) []*IndexField {
 	return fs
 }
 
-func (db *DB) ensureIndexes() {
+func appendIndex(m map[string]*IndexInfo, f *IndexField) {
+	ii := m[f.IndexName]
+	if ii == nil {
+		ii = &IndexInfo{}
+		m[f.IndexName] = ii
+	}
+	ii.Fields = append(ii.Fields, f)
+}
 
+func (db *DB) ensureIndexes(ctx context.Context, tablename string, m map[string]*IndexInfo) error {
+	var sb strings.Builder
+	for name, info := range m {
+		sb.Reset()
+
+		sort.Slice(info.Fields, func(i, j int) bool { return info.Fields[i].SortInIndex < info.Fields[j].SortInIndex })
+
+		sb.WriteString("CREATE ")
+		if strings.HasSuffix(name, "unique") {
+			sb.WriteString("UNIQUE ")
+		}
+		sb.WriteString("INDEX IF NOT EXISTS ")
+		sb.WriteString(name)
+		sb.WriteString(" ON ")
+		sb.WriteString(tablename)
+		sb.WriteString("(\r\n")
+
+		for i, f := range info.Fields {
+			sb.WriteRune('\t')
+			sb.WriteString(f.FieldName)
+			switch f.OrderType {
+			case IndexFieldOrderAsc:
+				sb.WriteString(" ASC")
+			default:
+				sb.WriteString(" DESC")
+			}
+			if i < len(info.Fields)-1 {
+				sb.WriteString(",\r\n")
+			}
+		}
+		sb.WriteString("\r\n);")
+
+		if _, err := db.Execute(ctx, sb.String(), nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (db *DB) CreateTable(ctx context.Context, v any) error {
@@ -168,6 +214,7 @@ func (db *DB) CreateTable(ctx context.Context, v any) error {
 
 	smap := DBReflectMapper.TypeMap(val.Type())
 	var fields []*FieldDefinition
+	var indexes = make(map[string]*IndexInfo)
 	for _, info := range smap.Index {
 		if info.Path != info.Name || info.Embedded {
 			continue
@@ -200,7 +247,9 @@ func (db *DB) CreateTable(ctx context.Context, v any) error {
 			fd.Default = dv
 		}
 
-		parseIndex(info.Options["index"])
+		for _, ief := range parseIndex(info.Name, info.Options["index"]) {
+			appendIndex(indexes, ief)
+		}
 
 		fd.Name = info.Name
 		fields = append(fields, fd)
@@ -264,12 +313,14 @@ func (db *DB) CreateTable(ctx context.Context, v any) error {
 
 	sb.WriteString("\tprimary key (")
 	sb.WriteString(strings.Join(utils.SliceMap(primaryKeys, func(_ int, fd *FieldDefinition) string { return fd.Name }), ","))
-	sb.WriteString(")\r\n)\r\n")
+	sb.WriteString(")\r\n);\r\n")
 
 	ddl := sb.String()
 	if db.logger != nil {
 		db.logger.Printf(ddl)
 	}
-	_, err := db.Execute(ctx, ddl, nil)
-	return err
+	if _, err := db.Execute(ctx, ddl, nil); err != nil {
+		return err
+	}
+	return db.ensureIndexes(ctx, tablename, indexes)
 }
