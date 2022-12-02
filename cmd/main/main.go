@@ -12,12 +12,18 @@ import (
 	"os/signal"
 )
 
+const (
+	DefaultConfigPath = "./.0.0.config.toml"
+	LocalConfigPath   = "./.0.0.config.local.toml"
+)
+
+//go:generate go run ../autoload
 func main() {
 	var conf config.Config
 
-	if utils.FsExists("./.config.toml") {
+	if utils.FsExists(DefaultConfigPath) {
 		var temp config.Config
-		if _, err := toml.DecodeFile("./.config.toml", &temp); err != nil {
+		if _, err := toml.DecodeFile(DefaultConfigPath, &temp); err != nil {
 			panic(err)
 		}
 		if err := mergo.Merge(&conf, &temp); err != nil {
@@ -25,9 +31,9 @@ func main() {
 		}
 	}
 
-	if utils.FsExists("./.config.local.toml") {
+	if utils.FsExists(LocalConfigPath) {
 		var temp config.Config
-		if _, err := toml.DecodeFile("./.config.local.toml", &temp); err != nil {
+		if _, err := toml.DecodeFile(LocalConfigPath, &temp); err != nil {
 			panic(err)
 		}
 		if err := mergo.Merge(&conf, &temp, mergo.WithOverride); err != nil {
@@ -43,6 +49,8 @@ func main() {
 	internal.Provide(func() *config.Config { return &conf })
 
 	internal.Provide(func() *h2tp.Router { return h2tp.NewRouter() })
+
+	<-internal.InvokeAll(5)
 
 	for {
 		select {

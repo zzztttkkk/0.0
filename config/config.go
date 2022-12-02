@@ -3,12 +3,14 @@ package config
 import (
 	"context"
 	"github.com/zzztttkkk/0.0/internal/sqlx"
+	"github.com/zzztttkkk/0.0/internal/sqlx/postgres"
 )
 
 type Config struct {
 	internal struct {
-		ctx   context.Context
-		group *sqlx.Group
+		ctx    context.Context
+		group  *sqlx.Group
+		master *postgres.DB
 	} `toml:"-"`
 
 	Database struct {

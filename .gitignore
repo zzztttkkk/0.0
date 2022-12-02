@@ -18,5 +18,5 @@
 /.vs
 /.vscode
 
-.config.toml
-.config.local.toml
+.0.0.config.toml
+.0.0.config.local.toml
