@@ -2,14 +2,16 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"os/signal"
+
 	"github.com/BurntSushi/toml"
 	"github.com/imdario/mergo"
 	"github.com/zzztttkkk/0.0/config"
 	"github.com/zzztttkkk/0.0/internal"
 	"github.com/zzztttkkk/0.0/internal/h2tp"
 	"github.com/zzztttkkk/0.0/internal/utils"
-	"os"
-	"os/signal"
 )
 
 const (
@@ -50,12 +52,11 @@ func main() {
 
 	internal.Provide(func() *h2tp.Router { return h2tp.NewRouter() })
 
-	<-internal.InvokeAll(5)
+	internal.InvokeAll(5)
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		}
+	fmt.Printf("Pid: %d\r\n", os.Getpid())
+
+	for range ctx.Done() {
+		break
 	}
 }

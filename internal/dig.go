@@ -30,61 +30,51 @@ func consume(k uintptr, v any, fn func(any) error, consumes *[]uintptr) {
 	}
 }
 
-func InvokeAll(timeout int) <-chan struct{} {
+func InvokeAll(timeout int) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(timeout))
 	defer cancel()
 
-	var ch = make(chan struct{}, 1)
+	var consumedInvokes []uintptr
+	var consumedProvides []uintptr
+	var stop bool
 
-	go func() {
-		var consumedInvokes []uintptr
-		var consumedProvides []uintptr
-		var stop bool
+	for !stop {
+		select {
+		case <-ctx.Done():
+			stop = true
+			break
+		default:
+			{
+				consumedInvokes = consumedInvokes[:0]
+				consumedProvides = consumedProvides[:0]
 
-		for !stop {
-			select {
-			case <-ctx.Done():
-				stop = true
-				break
-			default:
-				{
-					consumedInvokes = consumedInvokes[:0]
-					consumedProvides = consumedProvides[:0]
+				lock.Lock()
 
-					lock.Lock()
-
-					for ptr, fn := range provides {
-						consume(ptr, fn, func(a any) error { return c.Provide(a) }, &consumedProvides)
-					}
-
-					for ptr, fn := range invokes {
-						consume(ptr, fn, func(a any) error { return c.Invoke(a) }, &consumedInvokes)
-					}
-
-					for _, v := range consumedProvides {
-						delete(provides, v)
-					}
-					for _, v := range consumedInvokes {
-						delete(invokes, v)
-					}
-
-					lock.Unlock()
-
-					time.Sleep(time.Millisecond * 30)
+				for ptr, fn := range provides {
+					consume(ptr, fn, func(a any) error { return c.Provide(a) }, &consumedProvides)
 				}
+
+				for ptr, fn := range invokes {
+					consume(ptr, fn, func(a any) error { return c.Invoke(a) }, &consumedInvokes)
+				}
+
+				for _, v := range consumedProvides {
+					delete(provides, v)
+				}
+				for _, v := range consumedInvokes {
+					delete(invokes, v)
+				}
+
+				if len(provides) < 1 && len(invokes) < 1 {
+					stop = true
+				}
+
+				lock.Unlock()
+
+				time.Sleep(time.Millisecond * 30)
 			}
 		}
-
-		ch <- struct{}{}
-
-		for _, fn := range invokes {
-			if err := c.Invoke(fn); err != nil {
-				panic(err)
-			}
-		}
-	}()
-
-	return ch
+	}
 }
 
 func LazyInvoke(fn any) {
