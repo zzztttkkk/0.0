@@ -1,8 +1,10 @@
 package h2tp
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
@@ -61,7 +63,58 @@ var AllMethods = []string{
 	http.MethodTrace,
 }
 
-func (r *Router) Register(methods string, pattern string, handler Handler) {
+var (
+	h2tpHandlerType = reflect.TypeOf((*Handler)(nil)).Elem()
+	ctxType         = reflect.TypeOf((*context.Context)(nil)).Elem()
+	errType         = reflect.TypeOf((*error)(nil)).Elem()
+)
+
+type _ReflectDocHandler struct {
+	inType  reflect.Type
+	outType reflect.Type
+	fn      reflect.Value
+}
+
+func (r *_ReflectDocHandler) Handle(rctx *RequestCtx) {
+
+}
+
+func isLogicFunc(vt reflect.Type) bool {
+	if vt.NumIn() != 2 || vt.NumOut() != 2 {
+		return false
+	}
+
+	if vt.In(0) != ctxType || vt.In(1).Kind() != reflect.Struct {
+		return false
+	}
+
+	if vt.Out(0).Kind() != reflect.Struct || vt.Out(1) != errType {
+		return false
+	}
+	return true
+}
+
+func anyToHandler(v any) Handler {
+	rv := reflect.ValueOf(v)
+	if rv.Type().Implements(h2tpHandlerType) {
+		return v.(Handler)
+	}
+
+	if rv.Kind() == reflect.Func {
+		vt := rv.Type()
+		if !isLogicFunc(vt) {
+			return nil
+		}
+		return &_ReflectDocHandler{
+			inType:  vt.In(1),
+			outType: vt.Out(0),
+			fn:      rv,
+		}
+	}
+	return nil
+}
+
+func (r *Router) Register(methods string, pattern string, handler any) {
 	r.mustBeModifiable()
 
 	var temp []string
@@ -77,6 +130,8 @@ func (r *Router) Register(methods string, pattern string, handler Handler) {
 		}
 	}
 
+	h2tpHandler := anyToHandler(handler)
+
 	for _, method := range temp {
 		r.internal.Handle(method, pattern, func(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
 			rctx := RequestCtx{
@@ -85,8 +140,8 @@ func (r *Router) Register(methods string, pattern string, handler Handler) {
 				PathParams:     params,
 				middlewareIdx:  -1,
 			}
-			handler = r.makeMiddlewareWrapper(handler)
-			handler.Handle(&rctx)
+			h2tpHandler = r.makeMiddlewareWrapper(h2tpHandler)
+			h2tpHandler.Handle(&rctx)
 		})
 	}
 }

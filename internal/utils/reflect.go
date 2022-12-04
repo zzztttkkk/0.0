@@ -112,9 +112,6 @@ func (m *Mapper) TypeMap(t reflect.Type) *StructMap {
 // FieldMap returns the mapper's mapping of field names to reflect values.  Panics
 // if v's Kind is not Struct, or v is not Indirectable to a struct kind.
 func (m *Mapper) FieldMap(v reflect.Value) map[string]reflect.Value {
-	v = reflect.Indirect(v)
-	mustBe(v, reflect.Struct)
-
 	r := map[string]reflect.Value{}
 	tm := m.TypeMap(v.Type())
 	for tagName, fi := range tm.Names {
@@ -127,9 +124,6 @@ func (m *Mapper) FieldMap(v reflect.Value) map[string]reflect.Value {
 // Panics if v's Kind is not Struct or v is not Indirectable to a struct Kind.
 // Returns zero Value if the name is not found.
 func (m *Mapper) FieldByName(v reflect.Value, name string) reflect.Value {
-	v = reflect.Indirect(v)
-	mustBe(v, reflect.Struct)
-
 	tm := m.TypeMap(v.Type())
 	fi, ok := tm.Names[name]
 	if !ok {
@@ -142,9 +136,6 @@ func (m *Mapper) FieldByName(v reflect.Value, name string) reflect.Value {
 // for the value.  Panics if v's Kind is not Struct or v is not Indirectable
 // to a struct Kind.  Returns zero Value for each name not found.
 func (m *Mapper) FieldsByName(v reflect.Value, names []string) []reflect.Value {
-	v = reflect.Indirect(v)
-	mustBe(v, reflect.Struct)
-
 	tm := m.TypeMap(v.Type())
 	vals := make([]reflect.Value, 0, len(names))
 	for _, name := range names {
