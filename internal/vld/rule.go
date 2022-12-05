@@ -3,6 +3,7 @@ package vld
 import (
 	"fmt"
 	"html"
+	"mime/multipart"
 	"net/http"
 	"reflect"
 	"regexp"
@@ -19,22 +20,16 @@ const (
 	RuleTypeBool
 	RuleTypeString
 	RuleTypeFile
-	RuleTypeSlice
 	RuleTypeTime
 	RuleTypeVlder
 )
 
-const (
-	defaultMemSize = 32 << 20
-)
-
 type Rule struct {
-	Name      string
-	RuleType  RuleType
-	Gotype    reflect.Type
-	Ele       *Rules
-	SimpleEle *Rule
-	Index     []int
+	Name     string
+	RuleType RuleType
+	Gotype   reflect.Type
+	IsSlice  bool
+	Index    []int
 
 	Optional bool
 
@@ -186,16 +181,12 @@ func (rule *Rule) singleSimpleEle(raw string) (any, error) {
 	return nil, fmt.Errorf("")
 }
 
-func (rule *Rule) get(req *http.Request) (any, error) {
-	if rule.RuleType == RuleTypeSlice {
-		return nil, nil
-	}
-
+func (rule *Rule) one(v string) (any, error) {
 	switch rule.RuleType {
 	case RuleTypeVlder:
 		{
 			val := reflect.New(rule.Gotype)
-			err := val.Interface().(Vlder).FromString(rule.Name)
+			err := val.Interface().(Vlder).FromString(v)
 			if err != nil {
 				return nil, err
 			}
@@ -204,31 +195,78 @@ func (rule *Rule) get(req *http.Request) (any, error) {
 			}
 			return val.Elem().Interface(), nil
 		}
-	case RuleTypeFile:
-		{
-			_ = req.ParseMultipartForm(defaultMemSize)
-			fhs, ok := req.MultipartForm.File[rule.Name]
-			if !ok || len(fhs) < 1 {
-				if rule.Optional {
-					return nil, nil
-				}
-				return nil, fmt.Errorf("miss required")
-			}
-			return fhs[0], nil
-		}
 	default:
 		{
-			raw := req.FormValue(rule.Name)
-			if len(raw) < 1 {
+			return rule.singleSimpleEle(v)
+		}
+	}
+}
+
+func getFiles(req *http.Request, name string) []*multipart.FileHeader {
+	_ = req.ParseForm()
+	if req.MultipartForm == nil || req.MultipartForm.File == nil {
+		return nil
+	}
+	return req.MultipartForm.File[name]
+}
+
+func (rule *Rule) get(req *http.Request) (any, error) {
+	if rule.IsSlice {
+		if rule.RuleType == RuleTypeFile {
+			fhs := getFiles(req, rule.Name)
+			if len(fhs) < 1 {
 				if rule.Optional {
 					return nil, nil
 				}
 				return nil, fmt.Errorf("miss required")
 			}
 
+			nfhs := make([]*multipart.FileHeader, len(fhs), len(fhs))
+			copy(nfhs, fhs)
+			return nfhs, nil
+		} else {
+			_ = req.ParseForm()
+			svs := req.Form[rule.Name]
+			if len(svs) < 1 {
+				if rule.Optional {
+					return nil, nil
+				}
+				return nil, fmt.Errorf("miss required")
+			}
+
+			sliceVal := reflect.MakeSlice(reflect.SliceOf(rule.Gotype), 0, len(svs))
+
+			for _, sv := range svs {
+				ele, err := rule.one(sv)
+				if err != nil {
+					return nil, err
+				}
+				sliceVal = reflect.Append(sliceVal, reflect.ValueOf(ele))
+			}
+
+			return sliceVal.Interface(), nil
 		}
 	}
-	return nil, nil
+
+	if rule.RuleType == RuleTypeFile {
+		fhs := getFiles(req, rule.Name)
+		if len(fhs) < 1 {
+			if rule.Optional {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("miss required")
+		}
+		return fhs[0], nil
+	}
+
+	sv := req.FormValue(rule.Name)
+	if len(sv) < 1 {
+		if rule.Optional {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("miss required")
+	}
+	return rule.one(sv)
 }
 
 type Rules struct {
@@ -236,7 +274,7 @@ type Rules struct {
 	Data   []*Rule
 }
 
-func (rules *Rules) BinFromRequest(req *http.Request) (any, error) {
+func (rules *Rules) BindAndValidate(req *http.Request) (any, error) {
 	val := reflect.New(rules.Gotype).Elem()
 
 	for _, rule := range rules.Data {

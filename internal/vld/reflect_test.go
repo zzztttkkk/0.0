@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-type Address struct {
-	City string `vld:"city"`
-}
-
 type User struct {
 	Name      string    `vld:"name"`
 	Email     string    `vld:"email"`
@@ -41,5 +37,5 @@ func TestGetRules(t *testing.T) {
 	req.PostForm["created_at"] = []string{"189123000"}
 	req.PostForm["nums"] = []string{"1", "2", "3"}
 
-	fmt.Println(rules.BinFromRequest(req))
+	fmt.Println(rules.BindAndValidate(req))
 }

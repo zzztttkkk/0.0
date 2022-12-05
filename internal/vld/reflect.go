@@ -107,17 +107,10 @@ func infoToRule(info *utils.FieldInfo, ft reflect.Type) *Rule {
 		}
 	case reflect.Slice:
 		{
-			rule.RuleType = RuleTypeSlice
-			switch ft.Elem().Kind() {
-			case reflect.Struct:
-				{
-					rule.Ele = GetRules(ft.Elem())
-				}
-			default:
-				{
-					rule.SimpleEle = infoToRule(info, ft.Elem())
-				}
-			}
+			eleRule := infoToRule(info, ft.Elem())
+			*rule = *eleRule
+			rule.IsSlice = true
+			rule.Gotype = ft.Elem()
 		}
 	case reflect.Struct:
 		{
