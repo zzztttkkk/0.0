@@ -1,7 +1,7 @@
 package vld
 
 import (
-	"fmt"
+	"errors"
 	"html"
 	"mime/multipart"
 	"net/http"
@@ -49,155 +49,187 @@ type Rule struct {
 	TimeUnit   string
 }
 
-func (rule *Rule) string2Int(v string) (any, error) {
-	num, err := strconv.ParseInt(v, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("not a int")
-	}
-
+func (rule *Rule) intOk(num int64, err *Error) bool {
 	if rule.MinInt != nil && num < *rule.MinInt {
-		return nil, fmt.Errorf("out of range")
+		err.Reason = ErrorReasonNumOutOfRange
+		return false
 	}
 
 	if rule.MaxInt != nil && num > *rule.MaxInt {
-		return nil, fmt.Errorf("out of range")
+		err.Reason = ErrorReasonNumOutOfRange
+		return false
+	}
+	return true
+}
+
+func (rule *Rule) floatOk(num float64, err *Error) bool {
+	if rule.MinDouble != nil && num < *rule.MinDouble {
+		err.Reason = ErrorReasonNumOutOfRange
+		return false
+	}
+
+	if rule.MaxDouble != nil && num > *rule.MaxDouble {
+		err.Reason = ErrorReasonNumOutOfRange
+		return false
+	}
+	return true
+}
+
+func (rule *Rule) string2Int(v string, ep *Error) (any, bool) {
+	num, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		ep.Reason = ErrorReasonCanNotCastToNum
+		return nil, false
+	}
+
+	if !rule.intOk(num, ep) {
+		return nil, false
 	}
 
 	switch rule.Gotype.Kind() {
 	case reflect.Int:
-		return int(num), nil
+		return int(num), true
 	case reflect.Int8:
-		return int8(num), nil
+		return int8(num), true
 	case reflect.Int16:
-		return int16(num), nil
+		return int16(num), true
 	case reflect.Int32:
-		return int32(num), nil
+		return int32(num), true
 	case reflect.Int64:
-		return num, nil
+		return num, true
 	case reflect.Uint:
-		return uint(num), nil
+		return uint(num), true
 	case reflect.Uint8:
-		return uint8(num), nil
+		return uint8(num), true
 	case reflect.Uint16:
-		return uint16(num), nil
+		return uint16(num), true
 	case reflect.Uint32:
-		return uint32(num), nil
+		return uint32(num), true
 	case reflect.Uint64:
-		return uint64(num), nil
+		return uint64(num), true
 	}
-	return num, nil
+	return num, true
 }
 
-func (rule *Rule) string2Double(v string) (any, error) {
+func (rule *Rule) string2Double(v string, ep *Error) (any, bool) {
 	num, err := strconv.ParseFloat(v, 10)
 	if err != nil {
-		return nil, fmt.Errorf("not a float")
+		ep.Reason = ErrorReasonCanNotCastToNum
+		return nil, false
 	}
 
-	if rule.MinDouble != nil && num < *rule.MinDouble {
-		return nil, fmt.Errorf("out of range")
-	}
-
-	if rule.MaxDouble != nil && num > *rule.MaxDouble {
-		return nil, fmt.Errorf("out of range")
+	if !rule.floatOk(num, ep) {
+		return nil, false
 	}
 
 	switch rule.Gotype.Kind() {
 	case reflect.Float32:
-		return float32(num), nil
+		return float32(num), true
 	default:
-		return num, nil
+		return num, true
 	}
 }
 
-func (rule *Rule) string2Time(v string) (any, error) {
+func (rule *Rule) string2Time(v string, ep *Error) (any, bool) {
 	if len(rule.TimeLayout) > 0 {
-		return time.Parse(rule.TimeLayout, v)
+		t, e := time.Parse(rule.TimeLayout, v)
+		if e != nil {
+			ep.Reason = ErrorReasonBadTimeValue
+			return nil, false
+		}
+		return t, true
 	}
 
 	num, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("can not cast to time")
+		ep.Reason = ErrorReasonNumOutOfRange
+		return nil, false
 	}
 
 	switch rule.TimeUnit {
 	case "", "s":
-		return time.Unix(num, 0), nil
+		return time.Unix(num, 0), true
 	default:
-		return time.UnixMilli(num), nil
+		return time.UnixMilli(num), true
 	}
 }
 
-func (rule *Rule) checkString(v string) (any, error) {
-	if !rule.NoTrim {
-		v = strings.TrimSpace(v)
-	}
-
-	if !rule.NoEscape {
-		v = html.EscapeString(v)
-	}
-
+func (rule *Rule) stringOk(v string, ep *Error) bool {
 	l := len(v)
 	if rule.MaxLen != nil && l > *rule.MaxLen {
-		return nil, fmt.Errorf("length out of range")
+		ep.Reason = ErrorReasonLengthOutOfRange
+		return false
 	}
 	if rule.MinLen != nil && l < *rule.MinLen {
-		return nil, fmt.Errorf("length out of range")
+		ep.Reason = ErrorReasonLengthOutOfRange
+		return false
 	}
-
 	if rule.Regexp != nil && !rule.Regexp.MatchString(v) {
-		return nil, fmt.Errorf("not match regexp")
+		ep.Reason = ErrorReasonNotMatchRegexp
+		return false
 	}
-	return v, nil
+	return true
 }
 
-func (rule *Rule) singleSimpleEle(raw string) (any, error) {
+func (rule *Rule) bindAndValidateSingleSimpleEle(raw string, ep *Error) (any, bool) {
 	switch rule.RuleType {
 	case RuleTypeString:
 		{
-			return rule.checkString(raw)
+			if !rule.NoTrim {
+				raw = strings.TrimSpace(raw)
+			}
+
+			if !rule.NoEscape {
+				raw = html.EscapeString(raw)
+			}
+
+			if rule.stringOk(raw, ep) {
+				return raw, true
+			}
+			return nil, false
 		}
 	case RuleTypeInt:
 		{
-			return rule.string2Int(raw)
+			return rule.string2Int(raw, ep)
 		}
 	case RuleTypeDouble:
 		{
-			return rule.string2Double(raw)
+			return rule.string2Double(raw, ep)
 		}
 	case RuleTypeBool:
 		{
 			bol, err := strconv.ParseBool(raw)
 			if err != nil {
-				return nil, fmt.Errorf("not a bool")
+				ep.Reason = ErrorReasonCanNotCastToBool
+				return nil, false
 			}
-			return bol, nil
+			return bol, true
 		}
 	case RuleTypeTime:
 		{
-			return rule.string2Time(raw)
+			return rule.string2Time(raw, ep)
 		}
 	}
-	return nil, fmt.Errorf("")
+	panic(errors.New("unreachable error"))
 }
 
-func (rule *Rule) one(v string) (any, error) {
+func (rule *Rule) one(v string, ep *Error) (any, bool) {
 	switch rule.RuleType {
 	case RuleTypeVlder:
 		{
 			val := reflect.New(rule.Gotype)
-			err := val.Interface().(Vlder).FromString(v)
-			if err != nil {
-				return nil, err
+			ok := val.Interface().(Vlder).FromString(v, ep)
+			if !ok {
+				return nil, false
 			}
 			if rule.Gotype.Kind() == reflect.Pointer {
-				return val.Interface(), nil
+				return val.Interface(), true
 			}
-			return val.Elem().Interface(), nil
+			return val.Elem().Interface(), true
 		}
 	default:
 		{
-			return rule.singleSimpleEle(v)
+			return rule.bindAndValidateSingleSimpleEle(v, ep)
 		}
 	}
 }
@@ -210,41 +242,43 @@ func getFiles(req *http.Request, name string) []*multipart.FileHeader {
 	return req.MultipartForm.File[name]
 }
 
-func (rule *Rule) get(req *http.Request) (any, error) {
+func (rule *Rule) get(req *http.Request, ep *Error) (any, bool) {
 	if rule.IsSlice {
 		if rule.RuleType == RuleTypeFile {
 			fhs := getFiles(req, rule.Name)
 			if len(fhs) < 1 {
 				if rule.Optional {
-					return nil, nil
+					return nil, true
 				}
-				return nil, fmt.Errorf("miss required")
+				ep.Reason = ErrorReasonMissRequired
+				return nil, false
 			}
 
 			nfhs := make([]*multipart.FileHeader, len(fhs), len(fhs))
 			copy(nfhs, fhs)
-			return nfhs, nil
+			return nfhs, true
 		} else {
 			_ = req.ParseForm()
 			svs := req.Form[rule.Name]
 			if len(svs) < 1 {
 				if rule.Optional {
-					return nil, nil
+					return nil, true
 				}
-				return nil, fmt.Errorf("miss required")
+				ep.Reason = ErrorReasonMissRequired
+				return nil, false
 			}
 
 			sliceVal := reflect.MakeSlice(reflect.SliceOf(rule.Gotype), 0, len(svs))
 
 			for _, sv := range svs {
-				ele, err := rule.one(sv)
-				if err != nil {
-					return nil, err
+				ele, ok := rule.one(sv, ep)
+				if !ok {
+					return nil, false
 				}
 				sliceVal = reflect.Append(sliceVal, reflect.ValueOf(ele))
 			}
 
-			return sliceVal.Interface(), nil
+			return sliceVal.Interface(), true
 		}
 	}
 
@@ -252,21 +286,23 @@ func (rule *Rule) get(req *http.Request) (any, error) {
 		fhs := getFiles(req, rule.Name)
 		if len(fhs) < 1 {
 			if rule.Optional {
-				return nil, nil
+				return nil, true
 			}
-			return nil, fmt.Errorf("miss required")
+			ep.Reason = ErrorReasonMissRequired
+			return nil, false
 		}
-		return fhs[0], nil
+		return fhs[0], true
 	}
 
 	sv := req.FormValue(rule.Name)
 	if len(sv) < 1 {
 		if rule.Optional {
-			return nil, nil
+			return nil, true
 		}
-		return nil, fmt.Errorf("miss required")
+		ep.Reason = ErrorReasonMissRequired
+		return nil, false
 	}
-	return rule.one(sv)
+	return rule.one(sv, ep)
 }
 
 type Rules struct {
@@ -276,11 +312,17 @@ type Rules struct {
 
 func (rules *Rules) BindAndValidate(req *http.Request) (any, error) {
 	val := reflect.New(rules.Gotype).Elem()
-
+	var err Error
 	for _, rule := range rules.Data {
-		v, err := rule.get(req)
-		if err != nil {
-			return nil, err
+		v, ok := rule.get(req, &err)
+		if !ok {
+			err.PkgPath = rules.Gotype.PkgPath()
+			err.TypeName = rules.Gotype.Name()
+			err.Rule = rule
+			return nil, &err
+		}
+		if v == nil {
+			continue
 		}
 		vv := reflect.ValueOf(v)
 		if !vv.IsValid() {

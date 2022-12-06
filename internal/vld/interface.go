@@ -1,5 +1,5 @@
 package vld
 
 type Vlder interface {
-	FromString(string) error
+	FromString(string, *Error) bool
 }

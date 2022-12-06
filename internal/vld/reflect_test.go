@@ -14,7 +14,7 @@ type User struct {
 	Email     string    `vld:"email"`
 	Age       int       `vld:"age"`
 	CreatedAt time.Time `vld:"created_at"`
-	Nums      []int     `vld:"nums"`
+	Nums      []int     `vld:"nums;numrange=1-3"`
 }
 
 type AuthInfo struct {
@@ -35,7 +35,16 @@ func TestGetRules(t *testing.T) {
 	req.PostForm["email"] = []string{"ztk@local.dev"}
 	req.PostForm["age"] = []string{"123"}
 	req.PostForm["created_at"] = []string{"189123000"}
-	req.PostForm["nums"] = []string{"1", "2", "3"}
+	req.PostForm["nums"] = []string{"1", "21", "3"}
 
-	fmt.Println(rules.BindAndValidate(req))
+	u, e := rules.BindAndValidate(req)
+	if e != nil {
+		if te, ok := e.(*Error); ok {
+			fmt.Println(te.Detail())
+		} else {
+			fmt.Println(e)
+		}
+	} else {
+		fmt.Println(u)
+	}
 }
