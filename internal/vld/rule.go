@@ -197,6 +197,18 @@ func (rule *Rule) sliceLenOk(lenv int, ep *Error) bool {
 	return true
 }
 
+func (rule *Rule) fileOk(f *multipart.FileHeader, ep *Error) bool {
+	if rule.MinLen != nil && int(f.Size) < *rule.MinLen {
+		ep.Reason = ErrorReasonLengthOutOfRange
+		return false
+	}
+	if rule.MaxLen != nil && int(f.Size) > *rule.MaxLen {
+		ep.Reason = ErrorReasonLengthOutOfRange
+		return false
+	}
+	return true
+}
+
 func (rule *Rule) bindAndValidateSingleSimpleEle(raw string, ep *Error) (any, bool) {
 	switch rule.RuleType {
 	case RuleTypeString:
@@ -284,6 +296,12 @@ func (rule *Rule) get(req *http.Request, ep *Error) (any, bool) {
 				return nil, false
 			}
 
+			for _, fh := range fhs {
+				if !rule.fileOk(fh, ep) {
+					return nil, false
+				}
+			}
+
 			nfhs := make([]*multipart.FileHeader, len(fhs), len(fhs))
 			copy(nfhs, fhs)
 			return nfhs, true
@@ -324,7 +342,12 @@ func (rule *Rule) get(req *http.Request, ep *Error) (any, bool) {
 			ep.Reason = ErrorReasonMissRequired
 			return nil, false
 		}
-		return fhs[0], true
+
+		fp := fhs[0]
+		if !rule.fileOk(fp, ep) {
+			return nil, false
+		}
+		return fp, true
 	}
 
 	sv := req.FormValue(rule.Name)

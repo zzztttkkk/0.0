@@ -35,6 +35,6 @@ func TestGetRules(t *testing.T) {
 			fmt.Println(e)
 		}
 	} else {
-		fmt.Println(u)
+		fmt.Printf("%#v\n", u)
 	}
 }
