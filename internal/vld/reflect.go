@@ -159,6 +159,23 @@ func infoToRule(info *utils.FieldInfo, ft reflect.Type) (*Rule, error) {
 						*rule.MaxLen = int(*maxp)
 					}
 				}
+			case "runecountrange", "charcountrange":
+				{
+					minp, maxp, ok := stringToIntRange(v)
+					if !ok {
+						err = fmt.Errorf("bad len range, %s", v)
+						return
+					}
+
+					if minp != nil {
+						rule.MinRuneCount = new(int)
+						*rule.MinRuneCount = int(*minp)
+					}
+					if maxp != nil {
+						rule.MaxRuneCount = new(int)
+						*rule.MaxRuneCount = int(*maxp)
+					}
+				}
 			case "nummax":
 				{
 					if rule.RuleType == RuleTypeInt {
@@ -218,6 +235,26 @@ func infoToRule(info *utils.FieldInfo, ft reflect.Type) (*Rule, error) {
 					}
 					rule.MinLen = new(int)
 					*rule.MinLen = int(num)
+				}
+			case "runecountmax", "charcountmax":
+				{
+					num, e := strconv.ParseInt(v, 10, 64)
+					if e != nil {
+						err = fmt.Errorf("bad lenmax, %s", v)
+						return
+					}
+					rule.MaxRuneCount = new(int)
+					*rule.MaxRuneCount = int(num)
+				}
+			case "runecountmin", "charcountmin":
+				{
+					num, e := strconv.ParseInt(v, 10, 64)
+					if e != nil {
+						err = fmt.Errorf("bad lenmin, %s", v)
+						return
+					}
+					rule.MinRuneCount = new(int)
+					*rule.MinRuneCount = int(num)
 				}
 			case "optional":
 				{

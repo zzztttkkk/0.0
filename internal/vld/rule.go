@@ -2,6 +2,7 @@ package vld
 
 import (
 	"errors"
+	"github.com/zzztttkkk/0.0/internal/utils"
 	"html"
 	"mime/multipart"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type RuleType int
@@ -41,9 +43,11 @@ type Rule struct {
 	MaxLen *int
 	MinLen *int
 
-	NoTrim   bool
-	NoEscape bool
-	Regexp   *regexp.Regexp
+	MaxRuneCount *int
+	MinRuneCount *int
+	NoTrim       bool
+	NoEscape     bool
+	Regexp       *regexp.Regexp
 
 	TimeLayout string
 	TimeUnit   string
@@ -155,17 +159,39 @@ func (rule *Rule) string2Time(v string, ep *Error) (any, bool) {
 }
 
 func (rule *Rule) stringOk(v string, ep *Error) bool {
-	l := len(v)
-	if rule.MaxLen != nil && l > *rule.MaxLen {
-		ep.Reason = ErrorReasonLengthOutOfRange
-		return false
+	var runeCount = -1
+	if rule.MaxRuneCount != nil {
+		runeCount = utf8.RuneCount(utils.B(v))
+		if runeCount > *rule.MaxRuneCount {
+			ep.Reason = ErrorReasonLengthOutOfRange
+			return false
+		}
 	}
-	if rule.MinLen != nil && l < *rule.MinLen {
-		ep.Reason = ErrorReasonLengthOutOfRange
-		return false
+
+	if rule.MinRuneCount != nil {
+		if runeCount < 0 {
+			runeCount = utf8.RuneCount(utils.B(v))
+		}
+		if runeCount < *rule.MinRuneCount {
+			ep.Reason = ErrorReasonLengthOutOfRange
+			return false
+		}
 	}
-	if rule.Regexp != nil && !rule.Regexp.MatchString(v) {
+
+	if rule.Regexp != nil && !rule.Regexp.Match(utils.B(v)) {
 		ep.Reason = ErrorReasonNotMatchRegexp
+		return false
+	}
+	return true
+}
+
+func (rule *Rule) sliceLenOk(lenv int, ep *Error) bool {
+	if rule.MinLen != nil && lenv < *rule.MinLen {
+		ep.Reason = ErrorReasonLengthOutOfRange
+		return false
+	}
+	if rule.MaxLen != nil && lenv > *rule.MaxLen {
+		ep.Reason = ErrorReasonLengthOutOfRange
 		return false
 	}
 	return true
@@ -254,6 +280,10 @@ func (rule *Rule) get(req *http.Request, ep *Error) (any, bool) {
 				return nil, false
 			}
 
+			if !rule.sliceLenOk(len(fhs), ep) {
+				return nil, false
+			}
+
 			nfhs := make([]*multipart.FileHeader, len(fhs), len(fhs))
 			copy(nfhs, fhs)
 			return nfhs, true
@@ -268,6 +298,10 @@ func (rule *Rule) get(req *http.Request, ep *Error) (any, bool) {
 				return nil, false
 			}
 
+			if !rule.sliceLenOk(len(svs), ep) {
+				return nil, false
+			}
+
 			sliceVal := reflect.MakeSlice(reflect.SliceOf(rule.Gotype), 0, len(svs))
 
 			for _, sv := range svs {
@@ -277,7 +311,6 @@ func (rule *Rule) get(req *http.Request, ep *Error) (any, bool) {
 				}
 				sliceVal = reflect.Append(sliceVal, reflect.ValueOf(ele))
 			}
-
 			return sliceVal.Interface(), true
 		}
 	}
